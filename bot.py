@@ -29,7 +29,11 @@ class DatabaseManager:
         self.pool = None
 
     async def connect(self):
-        self.pool = await asyncpg.create_pool( dsn=DATABASE_URL )
+        self.pool = await asyncpg.create_pool(
+            dsn=DATABASE_URL,
+            min_size=1,
+            max_size=1
+        )
         await self._init_schema()
         print("☁️ Supabase Cloud Connection Established.")
 
@@ -215,7 +219,6 @@ bot = commands.Bot(
 async def on_ready():
     print(f'✅ Aegis Agent Online: Logged in as {bot.user}')
     print('--- AI Core & Real-Time Telemetry Loop Active ---')
-
 
 @bot.event
 async def on_message(message):
