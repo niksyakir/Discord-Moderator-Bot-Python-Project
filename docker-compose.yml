@@ -1,0 +1,25 @@
+services:
+
+  bot:
+    build: .
+    container_name: aegis-bot
+    env_file:
+      - .env
+    restart: unless-stopped
+    network_mode: bridge
+
+  dashboard:
+    image: python:3.11-slim
+    container_name: aegis-dashboard
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+      streamlit run dashboard.py --server.address 0.0.0.0"
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    restart: unless-stopped
+    network_mode: bridge

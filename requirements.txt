@@ -1,0 +1,11 @@
+discord.py
+python-dotenv
+aiohttp
+pandas
+asyncpg
+sqlalchemy
+psycopg2-binary
+streamlit
+numpy
+transformers
+torch
