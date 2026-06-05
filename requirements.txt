@@ -9,3 +9,5 @@ streamlit
 numpy
 transformers
 torch
+sentence-transformers
+scikit-learn
