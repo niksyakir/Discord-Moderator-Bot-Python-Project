@@ -32,13 +32,16 @@ class DatabaseManager:
         self.pool = await asyncpg.create_pool(
             dsn=DATABASE_URL,
             min_size=1,
-            max_size=1
+            max_size=3
         )
+
         await self._init_schema()
+
         print("☁️ Supabase Cloud Connection Established.")
 
     async def _init_schema(self):
         async with self.pool.acquire() as conn:
+
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
@@ -58,19 +61,34 @@ class DatabaseManager:
                 );
             ''')
 
-            print("✅ Cloud Database Schema Verified.")
+        print("✅ Cloud Database Schema Verified.")
 
-    async def log_message(self, message_id, user_id, channel_id, content, toxicity_score):
+    async def log_message(
+        self,
+        message_id,
+        user_id,
+        channel_id,
+        content,
+        toxicity_score
+    ):
         async with self.pool.acquire() as conn:
 
-            await conn.execute('''
-                INSERT INTO users (user_id, last_active) 
+            await conn.execute(
+                '''
+                INSERT INTO users (
+                    user_id,
+                    last_active
+                )
                 VALUES ($1, $2)
-                ON CONFLICT (user_id) 
+                ON CONFLICT (user_id)
                 DO UPDATE SET last_active = $2
-            ''', str(user_id), datetime.datetime.now())
+                ''',
+                str(user_id),
+                datetime.datetime.now()
+            )
 
-            await conn.execute('''
+            await conn.execute(
+                '''
                 INSERT INTO messages (
                     message_id,
                     user_id,
@@ -80,35 +98,54 @@ class DatabaseManager:
                     timestamp
                 )
                 VALUES ($1, $2, $3, $4, $5, $6)
-            ''',
-            str(message_id),
-            str(user_id),
-            str(channel_id),
-            content,
-            toxicity_score,
-            datetime.datetime.now())
+                ''',
+                str(message_id),
+                str(user_id),
+                str(channel_id),
+                content,
+                toxicity_score,
+                datetime.datetime.now()
+            )
 
-    async def update_trust_score(self, user_id, penalty_amount):
+    async def update_trust_score(
+        self,
+        user_id,
+        penalty_amount
+    ):
         async with self.pool.acquire() as conn:
-            await conn.execute('''
+
+            await conn.execute(
+                '''
                 UPDATE users
                 SET trust_score = trust_score - $1
                 WHERE user_id = $2
-            ''', penalty_amount, str(user_id))
+                ''',
+                penalty_amount,
+                str(user_id)
+            )
 
-    async def reward_trust_score(self, user_id, reward_amount=1.0):
+    async def reward_trust_score(
+        self,
+        user_id,
+        reward_amount=1.0
+    ):
         async with self.pool.acquire() as conn:
-            await conn.execute('''
-                UPDATE users
-                SET trust_score = LEAST(trust_score + $1, 100.0)
-                WHERE user_id = $2
-            ''', reward_amount, str(user_id))
 
+            await conn.execute(
+                '''
+                UPDATE users
+                SET trust_score = LEAST(
+                    trust_score + $1,
+                    100.0
+                )
+                WHERE user_id = $2
+                ''',
+                reward_amount,
+                str(user_id)
+            )
 
 # Initialize database
 db = DatabaseManager()
-asyncio.run(db.connect())
-
 
 # =========================
 # TOXICITY MODEL
@@ -135,7 +172,7 @@ async def get_toxicity_score(text):
         return 0.0
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         predictions = await loop.run_in_executor(
             None,
@@ -217,15 +254,18 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    print(f'✅ Aegis Agent Online: Logged in as {bot.user}')
-    print('--- AI Core & Real-Time Telemetry Loop Active ---')
+
+    if db.pool is None:
+        await db.connect()
+
+    print(f'✅ Aegis Agent Online: Logged in as {bot.user}', flush=True)
 
 @bot.event
 async def on_message(message):
 
     if message.author == bot.user:
         return
-
+    
     try:
 
         score = await get_toxicity_score(message.content)
@@ -245,7 +285,8 @@ async def on_message(message):
         print(
             f"[Telemetry Scan] "
             f"Score: {score:.2f} | "
-            f"{message.author}: {message.content}"
+            f"{message.author}: {message.content}",
+            flush=True
         )
 
         if score < 0.20:
@@ -254,8 +295,8 @@ async def on_message(message):
                     message.author.id,
                     1.0
                 )
-            except:
-                pass
+            except Exception as e:
+                print(f"reward_trust_score error: {e}")
 
         if message.channel.id not in channel_windows:
             channel_windows[message.channel.id] = []
@@ -291,7 +332,8 @@ async def on_message(message):
                 f"Mean: {moving_avg:.2f} | "
                 f"StdDev: {std_deviation:.2f} | "
                 f"Var: {variance:.2f} | "
-                f"Dynamic Target UCL: {dynamic_ucl:.2f}"
+                f"Dynamic Target UCL: {dynamic_ucl:.2f}",
+                flush=True
             )
 
             if moving_avg >= dynamic_ucl:
@@ -319,8 +361,8 @@ async def on_message(message):
                             message.author.id,
                             15.0
                         )
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"update_trust_score error: {e}")
 
                     channel_windows[message.channel.id] = [
                         0.0,
@@ -330,15 +372,14 @@ async def on_message(message):
                         0.0
                     ]
 
-                    print(
-                        "Local channel window cache reset."
-                    )
+                    print("Local channel window cache reset.", flush=True)
 
                     channel_cooldowns[message.channel.id] = time.time()
 
                     print(
                         "⏱️ Channel mitigation loop "
-                        "placed on cooldown."
+                        "placed on cooldown.",
+                        flush=True
                     )
 
                 else:
