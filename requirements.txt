@@ -11,3 +11,4 @@ transformers
 torch
 sentence-transformers
 scikit-learn
+fpdf2
