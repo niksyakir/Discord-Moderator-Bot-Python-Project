@@ -33,7 +33,8 @@ class DatabaseManager:
         self.pool = await asyncpg.create_pool(
             dsn=DATABASE_URL,
             min_size=1,
-            max_size=3
+            max_size=3,
+            statement_cache_size=0
         )
         await self._init_schema()
         print("☁️ Supabase Cloud Connection Established.")
