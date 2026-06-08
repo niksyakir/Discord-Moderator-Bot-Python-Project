@@ -63,8 +63,6 @@ class DatabaseManager:
     async def log_message(self, message_id, user_id, channel_id, content, toxicity_score):
         async with self.pool.acquire() as conn:
 
-            print(f"DB DEBUG: inserting message {message_id}", flush=True)
-
             await conn.execute(
                 '''
                 INSERT INTO users (user_id, last_active)
@@ -73,8 +71,6 @@ class DatabaseManager:
                 ''',
                 str(user_id), datetime.datetime.now()
             )
-
-            print("DB DEBUG: users table updated", flush=True)
 
             await conn.execute(
                 '''
@@ -88,8 +84,6 @@ class DatabaseManager:
                 toxicity_score,
                 datetime.datetime.now()
             )
-
-            print("DB DEBUG: messages table updated", flush=True)
 
     async def update_trust_score(self, user_id, penalty_amount):
         async with self.pool.acquire() as conn:
@@ -108,6 +102,22 @@ class DatabaseManager:
                 ''',
                 reward_amount, str(user_id)
             )
+    
+    async def get_trust_score(self, user_id):
+        async with self.pool.acquire() as conn:
+            result = await conn.fetchrow(
+                '''
+                SELECT trust_score
+                FROM users
+                WHERE user_id = $1
+                ''',
+                str(user_id)
+            )
+
+            if result:
+                return float(result["trust_score"])
+
+            return 100.0
 
     async def get_recent_messages(self, channel_id, limit=5):
         """Fetches the conversation context for the LLM."""
@@ -255,6 +265,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     if db.pool is None:
         await db.connect()
+
+    await bot.tree.sync()
+
     print(f'✅ Aegis Agent Online: Logged in as {bot.user}', flush=True)
 
 @bot.event
@@ -343,6 +356,41 @@ async def on_message(message):
         print(f"❌ Critical Event Loop Crash Prevented: {core_err}")
 
     await bot.process_commands(message)
+
+
+@bot.tree.command(
+    name="trustscore",
+    description="View a member's trust score"
+)
+async def trustscore(
+    interaction: discord.Interaction,
+    member: discord.Member
+):
+    score = await db.get_trust_score(member.id)
+
+    await interaction.response.send_message(
+        f"📊 {member.display_name}'s Trust Score: {score:.2f}"
+    )
+
+
+@bot.tree.command(
+    name="forgive",
+    description="Restore trust score to a member"
+)
+@discord.app_commands.default_permissions(administrator=True)
+async def forgive(
+    interaction: discord.Interaction,
+    member: discord.Member,
+    amount: float
+):
+    await db.reward_trust_score(member.id, amount)
+
+    new_score = await db.get_trust_score(member.id)
+
+    await interaction.response.send_message(
+        f"✅ Restored {amount:.1f} trust points to {member.display_name}. "
+        f"Current Trust Score: {new_score:.2f}"
+    )
 
 # =========================
 # START BOT
