@@ -266,7 +266,8 @@ async def on_ready():
     if db.pool is None:
         await db.connect()
 
-    await bot.tree.sync()
+    synced = await bot.tree.sync()
+    print(f"Synced {len(synced)} commands")
 
     print(f'✅ Aegis Agent Online: Logged in as {bot.user}', flush=True)
 
@@ -368,8 +369,40 @@ async def trustscore(
 ):
     score = await db.get_trust_score(member.id)
 
+    if score >= 70:
+        status = "Safe"
+        colour = discord.Color.green()
+    elif score >= 40:
+        status = "At Risk"
+        colour = discord.Color.gold()
+    else:
+        status = "High Risk"
+        colour = discord.Color.red()
+
+    embed = discord.Embed(
+        title="🛡️ Your Aegis Trust Score",
+        color=colour
+    )
+
+    embed.add_field(
+        name="Score",
+        value=f"{score:.2f} / 100",
+        inline=True
+    )
+
+    embed.add_field(
+        name="Status",
+        value=status,
+        inline=True
+    )
+
+    embed.set_footer(
+        text="Stay respectful to keep your score high! | Aegis Bot"
+    )
+
     await interaction.response.send_message(
-        f"📊 {member.display_name}'s Trust Score: {score:.2f}"
+        embed=embed,
+        ephemeral=True
     )
 
 
