@@ -62,6 +62,9 @@ class DatabaseManager:
 
     async def log_message(self, message_id, user_id, channel_id, content, toxicity_score):
         async with self.pool.acquire() as conn:
+
+            print(f"DB DEBUG: inserting message {message_id}", flush=True)
+
             await conn.execute(
                 '''
                 INSERT INTO users (user_id, last_active)
@@ -70,13 +73,23 @@ class DatabaseManager:
                 ''',
                 str(user_id), datetime.datetime.now()
             )
+
+            print("DB DEBUG: users table updated", flush=True)
+
             await conn.execute(
                 '''
                 INSERT INTO messages (message_id, user_id, channel_id, content, toxicity_score, timestamp)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 ''',
-                str(message_id), str(user_id), str(channel_id), content, toxicity_score, datetime.datetime.now()
+                str(message_id),
+                str(user_id),
+                str(channel_id),
+                content,
+                toxicity_score,
+                datetime.datetime.now()
             )
+
+            print("DB DEBUG: messages table updated", flush=True)
 
     async def update_trust_score(self, user_id, penalty_amount):
         async with self.pool.acquire() as conn:
