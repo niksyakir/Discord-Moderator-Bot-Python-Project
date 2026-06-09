@@ -85,6 +85,13 @@ class DatabaseManager:
                 datetime.datetime.now()
             )
 
+            print(
+                f"[DB INSERT] user={user_id} "
+                f"message_id={message_id} "
+                f"score={toxicity_score:.2f}",
+                flush=True
+            )
+
     async def update_trust_score(self, user_id, penalty_amount):
         async with self.pool.acquire() as conn:
             await conn.execute(
@@ -286,6 +293,50 @@ async def on_message(message):
 
         print(f"[Telemetry Scan] Score: {score:.2f} | {message.author}: {message.content}", flush=True)
 
+        if score >= 0.90:
+
+            current_score = await db.get_trust_score(message.author.id)
+
+            embed = discord.Embed(
+                title="⚠️ Toxic Content Detected",
+                description=(
+                    f"{message.author.mention}, your message was flagged "
+                    f"for potentially harmful language."
+                ),
+                color=discord.Color.orange()
+            )
+
+            embed.add_field(
+                name="Toxicity Score",
+                value=f"{score:.2f}",
+                inline=True
+            )
+
+            embed.add_field(
+                name="Current Trust Score",
+                value=f"{current_score:.2f}",
+                inline=True
+            )
+
+            if current_score < 40:
+                action_text = "User would be timed out (High Risk)"
+            elif current_score < 70:
+                action_text = "User is At Risk"
+            else:
+                action_text = "Message logged and monitored"
+
+            embed.add_field(
+                name="Moderation Status",
+                value=action_text,
+                inline=False
+            )
+
+            embed.set_footer(
+                text="Aegis Moderation System"
+            )
+
+            await message.channel.send(embed=embed)
+
         # REPUTATION REWARDS
         if score < 0.20:
             try:
@@ -341,12 +392,69 @@ async def on_message(message):
                         warning_msg = f"⚠️ Anomalous toxicity detected. Moving Average: {moving_avg:.2f}. Please remain respectful."
                     
                     # Intervene in the channel
-                    await message.channel.send(warning_msg)
+                    trust_score = await db.get_trust_score(message.author.id)
+                    member = message.author
 
-                    try:
-                        await db.update_trust_score(message.author.id, 15.0)
-                    except Exception:
-                        pass
+                    # STRIKE 1
+                    if trust_score > 70:
+
+                        await message.channel.send(warning_msg)
+
+                        try:
+                            await db.update_trust_score(message.author.id, 15.0)
+                        except Exception:
+                            pass
+
+                    # STRIKE 2
+                    elif 40 <= trust_score <= 70:
+
+                        print(f"[Strike 2] Trust={trust_score:.0f} Applying timeout.")
+
+                        try:
+                            await member.timeout(
+                                datetime.timedelta(seconds=10),
+                                reason="Repeated toxicity detected by Aegis"
+                            )
+
+                            await message.channel.send(
+                                f"⏰ {member.mention} has been placed in a 10-second timeout.\n"
+                                f"Trust Score: `{trust_score:.0f} / 100`"
+                            )
+
+                        except discord.Forbidden:
+                            print("⚠️ Missing Moderate Members permission.")
+                        except Exception as timeout_err:
+                            print(f"⚠️ Timeout error: {timeout_err}")
+
+                        try:
+                            await db.update_trust_score(message.author.id, 20.0)
+                        except Exception:
+                            pass
+
+                    # STRIKE 3
+                    else:
+
+                        print(f"[Strike 3] Trust={trust_score:.0f} Kicking user.")
+
+                        try:
+                            await member.kick(
+                                reason="Trust score below threshold"
+                            )
+
+                            await message.channel.send(
+                                f"🔨 {member.display_name} has been kicked by Aegis.\n"
+                                f"Trust Score: `{trust_score:.0f} / 100`"
+                            )
+
+                        except discord.Forbidden:
+                            print("⚠️ Missing Kick Members permission.")
+                        except Exception as kick_err:
+                            print(f"⚠️ Kick error: {kick_err}")
+
+                        try:
+                            await db.update_trust_score(message.author.id, 30.0)
+                        except Exception:
+                            pass
 
                     # Reset local window and apply cooldown
                     channel_windows[message.channel.id] = [0.0, 0.0, 0.0, 0.0, 0.0]
