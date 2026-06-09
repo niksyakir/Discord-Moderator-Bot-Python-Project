@@ -295,6 +295,30 @@ async def on_message(message):
 
         if score >= 0.90:
 
+            try:
+                await message.delete()
+
+                await message.channel.send(
+                    f"🚫 {message.author.mention}, an extremely toxic message was automatically removed by Aegis.",
+                    delete_after=10
+                )
+
+                print(
+                    f"[SNIPER] Deleted message from {message.author} "
+                    f"(score: {score:.2f})",
+                    flush=True
+                )
+
+            except discord.Forbidden:
+                print(
+                    "⚠️ Sniper failed: Bot is missing Manage Messages permission."
+                )
+
+            except discord.NotFound:
+                print(
+                    "⚠️ Sniper: Message was already deleted."
+                )
+
             current_score = await db.get_trust_score(message.author.id)
 
             embed = discord.Embed(
