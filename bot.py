@@ -390,10 +390,10 @@ async def on_message(message):
             adjustment = (0.20 * std_deviation) if not pd.isna(std_deviation) else 0.02
             dynamic_ucl = min(0.55, 0.40 + adjustment)
 
-            if moving_avg >= dynamic_ucl:
+            if moving_avg >= (dynamic_ucl * 0.8):
                 last_warning = channel_cooldowns.get(message.channel.id, 0)
 
-                if time.time() - last_warning > 60:
+                if time.time() - last_warning > 10:
                     
                     # --- RAG PIPELINE EXECUTION ---
                     try:
