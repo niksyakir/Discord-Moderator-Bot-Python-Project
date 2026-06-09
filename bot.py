@@ -96,7 +96,7 @@ class DatabaseManager:
         async with self.pool.acquire() as conn:
             await conn.execute(
                 '''
-                UPDATE users SET trust_score = trust_score - $1 WHERE user_id = $2
+                UPDATE users SET trust_score = GREATEST(trust_score - $1, 0) WHERE user_id = $2
                 ''',
                 penalty_amount, str(user_id)
             )
@@ -337,7 +337,7 @@ async def on_message(message):
             )
 
             embed.add_field(
-                name="Current Trust Score",
+                name="Stored Trust Score",
                 value=f"{current_score:.2f}",
                 inline=True
             )
@@ -345,7 +345,10 @@ async def on_message(message):
             if current_score < 40:
                 action_text = "User would be timed out (High Risk)"
             elif current_score < 70:
-                action_text = "User is At Risk"
+                action_text = (
+                    "At Risk - Trust score will be reduced "
+                    "if repeated toxic behavior continues."
+                )
             else:
                 action_text = "Message logged and monitored"
 
